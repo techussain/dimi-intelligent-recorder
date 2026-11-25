@@ -1,0 +1,25 @@
+# Keeps the SHA-pinned GitHub Actions and the npm dependencies up to date
+# with weekly, grouped pull requests.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Electron majors need a manual test pass on a real machine: own PRs.
+      electron:
+        patterns: ['electron', 'electron-builder', 'electron-updater']
+      dev-dependencies:
+        dependency-type: development
+        exclude-patterns: ['electron', 'electron-builder']
+        update-types: ['minor', 'patch']

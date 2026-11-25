@@ -1,0 +1,8 @@
+# Keep LF everywhere (Prettier checks for LF; Windows autocrlf would
+# otherwise check files out as CRLF and fail `npm run format:check`).
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.wasm binary
