@@ -61,7 +61,7 @@
     "cmdk": "^1.1.1",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
-    "electron": "45.2.3",
+    "electron": "45.4.1",
     "electron-builder": "26.18.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
