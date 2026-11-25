@@ -1,0 +1,166 @@
+{
+  "name": "dimi-intelligent-recorder",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Record your screen, webcam and microphone straight onto a multi-track timeline, then edit, transcribe, caption and export — all on your own computer.",
+  "author": "techussain",
+  "license": "MIT",
+  "homepage": "https://github.com/techussain/dimi-intelligent-recorder#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/techussain/dimi-intelligent-recorder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/techussain/dimi-intelligent-recorder/issues"
+  },
+  "keywords": [
+    "screen-recorder",
+    "video-editor",
+    "electron",
+    "transcription",
+    "captions",
+    "whisper",
+    "webcodecs"
+  ],
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "preview": "vite preview",
+    "electron:precompile": "tsc -p tsconfig.electron.json",
+    "dev:electron": "npm run electron:precompile && concurrently -k -r \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/run-electron.mjs\"",
+    "build:electron": "npm run notices && tsc -b && vite build && npm run electron:precompile && electron-builder --publish never",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "notices": "node scripts/generate-notices.mjs"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/montserrat": "^5.3.0",
+    "@fontsource-variable/playfair-display": "^5.3.0",
+    "@fontsource-variable/roboto-slab": "^5.3.0",
+    "@fontsource/bebas-neue": "^5.3.0",
+    "@fontsource/poppins": "^5.3.0",
+    "@huggingface/transformers": "^4.3.0",
+    "@types/node": "^24.12.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/ui": "^4.1.5",
+    "autoprefixer": "^10.5.0",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "fflate": "^0.8.2",
+    "globals": "^17.5.0",
+    "idb-keyval": "^6.2.2",
+    "immer": "^11.1.4",
+    "jsdom": "^29.1.0",
+    "lottie-web": "^5.13.0",
+    "lucide-react": "^1.8.0",
+    "mediabunny": "^1.40.1",
+    "postcss": "^8.5.10",
+    "prettier": "^3.8.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.58.2",
+    "vite": "^8.0.9",
+    "vitest": "^4.1.5",
+    "wait-on": "^8.0.1",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "build": {
+    "appId": "com.dimi.intelligentrecorder",
+    "productName": "Dimi Intelligent Recorder",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "dist-electron/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "techussain",
+        "repo": "dimi-intelligent-recorder",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Dimi Intelligent Recorder uses the camera to record webcam video.",
+        "NSMicrophoneUsageDescription": "Dimi Intelligent Recorder uses the microphone to record audio."
+      }
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo"
+    },
+    "icon": "build/icon.png",
+    "extraResources": [
+      {
+        "from": "PRIVACY.md",
+        "to": "PRIVACY.md"
+      },
+      {
+        "from": "build/THIRD_PARTY_NOTICES.txt",
+        "to": "THIRD_PARTY_NOTICES.txt"
+      }
+    ]
+  }
+}

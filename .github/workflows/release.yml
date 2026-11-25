@@ -1,0 +1,203 @@
+name: Release
+
+# Builds the installers on Windows and macOS and publishes them (plus the
+# latest*.yml files electron-updater reads) to this repository's Releases.
+#
+#  1. prepare  — checks the tag matches package.json and creates a DRAFT
+#                release (so users never see half a release)
+#  2. build    — per OS: build, sign/notarize if the secrets exist, upload
+#  3. publish  — un-drafts the release once every platform uploaded
+#
+# Publishing uses the workflow's own GITHUB_TOKEN. Manual runs
+# (workflow_dispatch) don't publish; the installers are attached to the run.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          # Publish only for tag pushes.
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Not publishing (not a tag push)."
+          fi
+
+      - name: Create draft release
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists"
+          else
+            # Release notes: this version's section of CHANGELOG.md.
+            awk -v v="$VERSION" '
+              index($0, "## [" v "]") == 1 { on = 1; next }
+              on && /^## \[/ { exit }
+              on { print }
+            ' CHANGELOG.md > notes.md
+            if [[ ! -s notes.md ]]; then
+              echo "::warning::No CHANGELOG.md section for $VERSION"
+              echo "Dimi Intelligent Recorder $VERSION" > notes.md
+            fi
+            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft \
+              --title "Dimi Intelligent Recorder $VERSION" \
+              --notes-file notes.md
+          fi
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Build main process
+        run: npm run electron:precompile
+
+      - name: Generate third-party notices
+        run: npm run notices
+
+      # Export signing variables only when the secrets exist, so unsigned
+      # builds work without any configuration.
+      - name: Configure Windows signing
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$WIN_CSC_LINK" ]]; then
+            # Delimiter syntax: base64 certificates may contain newlines.
+            {
+              echo "CSC_LINK<<__CSC__"; echo "$WIN_CSC_LINK"; echo "__CSC__"
+              echo "CSC_KEY_PASSWORD<<__CSC__"; echo "$WIN_CSC_KEY_PASSWORD"; echo "__CSC__"
+            } >> "$GITHUB_ENV"
+            echo "SIGNED_BUILD=true" >> "$GITHUB_ENV"
+            echo "Windows code signing enabled"
+          else
+            echo "::warning::WIN_CSC_LINK not set — building an unsigned Windows installer (updates: notify only, no auto-install)"
+          fi
+
+      - name: Configure macOS signing & notarization
+        if: runner.os == 'macOS'
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [[ -n "$MAC_CSC_LINK" ]]; then
+            {
+              echo "CSC_LINK<<__CSC__"; echo "$MAC_CSC_LINK"; echo "__CSC__"
+              echo "CSC_KEY_PASSWORD<<__CSC__"; echo "$MAC_CSC_KEY_PASSWORD"; echo "__CSC__"
+            } >> "$GITHUB_ENV"
+            echo "SIGNED_BUILD=true" >> "$GITHUB_ENV"
+            echo "macOS code signing enabled"
+            if [[ -n "$APPLE_ID" && -n "$APPLE_APP_SPECIFIC_PASSWORD" && -n "$APPLE_TEAM_ID" ]]; then
+              {
+                echo "APPLE_ID=$APPLE_ID"
+                echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD"
+                echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+              } >> "$GITHUB_ENV"
+              echo "Notarization enabled"
+            else
+              echo "::warning::Apple notarization secrets not set — the app will be signed but not notarized"
+            fi
+          else
+            # No certificate: don't let electron-builder look for one in the keychain.
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            echo "::warning::MAC_CSC_LINK not set — building an unsigned macOS app (updates: notify only, no auto-install)"
+          fi
+
+      # Signed builds are marked so the app enables silent auto-update
+      # (electron/updater.cts). Unsigned builds only notify about new versions.
+      - name: Package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH: ${{ needs.prepare.outputs.publish }}
+        run: |
+          args=()
+          if [[ "$SIGNED_BUILD" == "true" ]]; then
+            args+=(-c.extraMetadata.signedBuild=true)
+          fi
+          if [[ "$PUBLISH" == "true" ]]; then
+            npx electron-builder --publish always "${args[@]}"
+          else
+            npx electron-builder --publish never "${args[@]}"
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: installers-${{ runner.os }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+
+  publish:
+    name: Publish release
+    needs: [prepare, build]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Un-draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest

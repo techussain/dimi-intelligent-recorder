@@ -1,0 +1,60 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! For security issues, please use
+        [private reporting](https://github.com/techussain/dimi-intelligent-recorder/security/advisories/new) instead.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: From Help → About.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux
+        - Browser (Chrome / Edge)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a recording with screen + mic
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Sometimes
+        - Once
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and attachments
+      description: |
+        Help → Open Logs Folder — zip and attach the folder. A short screen recording of the
+        problem helps a lot.
